@@ -12,8 +12,9 @@ A reusable multiplex counter pricing engine with a responsive booking UI, tier a
 - Per-ticket convenience fee
 - GST
 - Exact paisa calculations using Python `Decimal`
-- Professional responsive counter UI
-- Live bill preview with color-coded discounts
+- Professional responsive cinema-counter UI
+- Live bill preview with clear pricing breakdown
+- Membership toggle and booking reset
 - Printable receipt
 - REST API
 - Automated tests
@@ -131,3 +132,6 @@ requirements.txt
 ## Assumptions
 
 The supplied problem statement intentionally leaves some values and ordering details open. Those choices are centralized and documented so the engine can be adapted to another cinema counter without rewriting the core pricing logic.
+
+## Price-list import
+The counter also exposes `POST /api/import-prices` for a messy two-column CSV (`seat class, price`). Names are trimmed and normalized case-insensitively; currency symbols, spaces, and thousands separators are accepted. Blank names/prices, malformed values, and negative prices are rejected. Duplicate class names are de-duplicated case-insensitively, with the first valid occurrence retained. The response reports imported, de-duplicated, and rejected rows.

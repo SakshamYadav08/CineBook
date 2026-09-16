@@ -45,7 +45,7 @@ class PricingEngine:
         if c.max_tickets_per_booking <= 0:
             raise ValueError("Maximum booking quantity must be positive")
 
-    def calculate(self, selections: Dict[str, int], is_member: bool = False) -> dict:
+    def calculate(self, selections: Dict[str, int], is_member: bool = False, festival: bool = True) -> dict:
         if not selections:
             raise PricingError("Select at least one ticket")
 
@@ -74,7 +74,7 @@ class PricingEngine:
             raise PricingError(f"Maximum {self.config.max_tickets_per_booking} tickets per booking")
 
         ticket_subtotal = money(ticket_subtotal)
-        festival_discount = min(money(self.config.festival_discount), ticket_subtotal)
+        festival_discount = min(money(self.config.festival_discount), ticket_subtotal) if festival else Decimal("0.00")
         after_festival = money(ticket_subtotal - festival_discount)
 
         member_discount = Decimal("0.00")
@@ -103,6 +103,7 @@ class PricingEngine:
             "items": lines,
             "quantity": total_quantity,
             "member": bool(is_member),
+            "festival": bool(festival),
             "ticket_subtotal": ticket_subtotal,
             "festival_discount": festival_discount,
             "member_discount": member_discount,

@@ -74,3 +74,18 @@ def test_api_rejects_sold_out():
     response = client.post("/api/price", json={"selections": {"Recliner": 1}, "member": False})
     assert response.status_code == 400
     assert "sold out" in response.get_json()["error"].lower()
+
+def test_import_price_list_normalizes_and_reports():
+    from app.importer import import_price_list
+    raw = "Silver, ₹150\nsILVER,150.00\nGold,1,200\nGold,₹1200\nRecliner, -50\n,250\nVIP,"
+    # comma in an unquoted price is treated as an extra column and therefore invalid/missing price shape
+    result = import_price_list(raw, {"silver": 18, "gold": 12})
+    assert result["tiers"]["silver"].price == Decimal("150.00")
+    assert any(x["reason"].startswith("duplicate") for x in result["deduplicated"])
+    assert any(x["reason"] == "negative price" for x in result["rejected"])
+    assert any(x["reason"] == "blank seat class" for x in result["rejected"])
+    assert any(x["reason"] == "blank price" for x in result["rejected"])
+
+def test_festival_can_be_disabled(engine):
+    r = engine.calculate({"silver": 1}, False, festival=False)
+    assert r["festival_discount"] == Decimal("0.00")

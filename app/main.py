@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, render_template, request
 from .config import CINEMA, TIERS, PRICING
 from .pricing import PricingEngine, PricingError
+from .importer import import_price_list
 
 app = Flask(__name__)
 engine = PricingEngine(TIERS, PRICING)
@@ -23,6 +24,21 @@ def tiers():
         {**t, "price": f'{t["price"]:.2f}'} for t in engine.available_tiers()
     ])
 
+@app.post("/api/import-prices")
+def import_prices():
+    global engine
+    data = request.get_json(silent=True) or {}
+    result = import_price_list(data.get("text", ""), {k.lower(): t.available_seats for k, t in engine.tiers.items()})
+    if not result["tiers"]:
+        return jsonify({"error": "No valid price rows were imported", "imported": result["imported"], "deduplicated": result["deduplicated"], "rejected": result["rejected"]}), 400
+    engine = PricingEngine(result["tiers"], PRICING)
+    return jsonify({
+        "tiers": [{**t, "price": f'{t["price"]:.2f}'} for t in engine.available_tiers()],
+        "imported": [{**x, "price": f'{x["price"]:.2f}'} for x in result["imported"]],
+        "deduplicated": result["deduplicated"],
+        "rejected": result["rejected"],
+    })
+
 @app.post("/api/price")
 def price():
     data = request.get_json(silent=True) or {}
@@ -36,7 +52,7 @@ def price():
                 raise PricingError("Ticket quantities must be whole numbers")
             if qty > 0:
                 parsed[tier] = qty
-        result = engine.calculate(parsed, bool(data.get("member", False)))
+        result = engine.calculate(parsed, bool(data.get("member", False)), bool(data.get("festival", True)))
 
         def clean(obj):
             if isinstance(obj, dict):

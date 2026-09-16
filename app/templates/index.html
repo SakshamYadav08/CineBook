@@ -63,13 +63,27 @@
       {% endfor %}
       </div>
 
-      <div class="member-row">
-        <label class="check-wrap">
-          <input id="member" type="checkbox">
-          <span class="fake-check">✓</span>
-          <span><strong>Membership discount</strong><small>10% off, capped at ₹100</small></span>
+      <div class="offers-grid">
+        <label class="offer-row">
+          <input id="festival" type="checkbox" checked>
+          <span><b>Festival offer</b><small>Flat ₹50 discount</small></span>
         </label>
-        <span class="member-tag">MEMBER</span>
+        <label class="offer-row">
+          <input id="member" type="checkbox">
+          <span><b>Membership</b><small>10% off, capped at ₹100</small></span>
+        </label>
+      </div>
+
+      <div class="import-box">
+        <div class="import-head"><div><span class="eyebrow">PRICE LIST IMPORT</span><strong>Load seat-class prices</strong></div><button id="sampleImport" type="button">Use sample</button></div>
+        <textarea id="priceInput" placeholder="Silver, ₹150
+GOLD, 220.00
+recliner, 1,500
+Silver, 150
+VIP, -50
+, 250"></textarea>
+        <div class="import-actions"><button id="importPrices" class="secondary" type="button">Import & clean list</button><span>CSV · name, price</span></div>
+        <div id="importReport" class="import-report hidden"></div>
       </div>
 
       <div class="booking-actions">
@@ -165,7 +179,7 @@ async function calculate() {
     const response = await fetch("/api/price", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({selections, member: document.getElementById("member").checked})
+      body: JSON.stringify({selections, member: document.getElementById("member").checked, festival: document.getElementById("festival").checked})
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to calculate price");
@@ -218,6 +232,7 @@ document.querySelectorAll(".tier-row").forEach(row => {
 });
 
 document.getElementById("member").addEventListener("change", calculate);
+document.getElementById("festival").addEventListener("change", calculate);
 
 document.getElementById("clear").addEventListener("click", () => {
   Object.keys(selections).forEach(k => delete selections[k]);
@@ -229,6 +244,24 @@ document.getElementById("clear").addEventListener("click", () => {
 });
 
 document.getElementById("print").addEventListener("click", () => window.print());
+
+document.getElementById("sampleImport").addEventListener("click", () => {
+  document.getElementById("priceInput").value = "Silver, ₹150\nGOLD, 220.00\nrecliner, 1,500\nSilver, 150\nVIP, -50\n, 250\nDeluxe,";
+});
+
+document.getElementById("importPrices").addEventListener("click", async () => {
+  const text = document.getElementById("priceInput").value;
+  const report = document.getElementById("importReport");
+  try {
+    const response = await fetch("/api/import-prices", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({text})});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Import failed");
+    report.innerHTML = `<div class="report-counts"><b>${data.imported.length} imported</b><b>${data.deduplicated.length} de-duplicated</b><b>${data.rejected.length} rejected</b></div>` +
+      `<div class="report-list">${data.imported.map(x=>`<span>✓ ${x.name} · ₹${x.price}</span>`).join("")}${data.deduplicated.map(x=>`<span>↺ line ${x.line} · ${x.name}</span>`).join("")}${data.rejected.map(x=>`<span>× line ${x.line} · ${x.reason}</span>`).join("")}</div>`;
+    report.classList.remove("hidden");
+    location.reload();
+  } catch (e) { showError(e.message); }
+});
 </script>
 </body>
 </html>
