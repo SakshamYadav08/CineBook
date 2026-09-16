@@ -1,0 +1,234 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ cinema.name }} · Counter</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">A</div>
+    <div><strong>{{ cinema.name }}</strong><small>Ticket Counter</small></div>
+  </div>
+  <div class="operator"><span class="live-dot"></span> Counter ready</div>
+</header>
+
+<main class="shell">
+  <section class="showbar">
+    <div>
+      <span class="eyebrow">CURRENT SHOW</span>
+      <h1>{{ cinema.movie }}</h1>
+      <div class="show-meta">
+        <span>{{ cinema.date }}</span><i>•</i><span>{{ cinema.time }}</span>
+        <i>•</i><span>{{ cinema.screen }}</span>
+      </div>
+    </div>
+    <div class="show-note">
+      <span>Festival offer</span>
+      <strong>₹50 off</strong>
+    </div>
+  </section>
+
+  <div class="workspace">
+    <section class="card booking-card">
+      <div class="card-head">
+        <div>
+          <span class="eyebrow">BOOKING</span>
+          <h2>Select ticket tier</h2>
+        </div>
+        <div class="ticket-count"><b id="count">0</b><span>/ {{ config.max_tickets_per_booking }} tickets</span></div>
+      </div>
+
+      <div class="tier-list">
+      {% for tier in tiers %}
+        <div class="tier-row {% if not tier.available %}disabled{% endif %}"
+             data-tier="{{ tier.name }}" data-price="{{ tier.price }}" data-available="{{ tier.available_seats }}">
+          <div class="tier-swatch tier-{{ tier.name|lower }}">{{ tier.name[0] }}</div>
+          <div class="tier-copy">
+            <div class="tier-name">{{ tier.name }}</div>
+            <div class="tier-price">₹{{ "%.2f"|format(tier.price) }} <span>per ticket</span></div>
+            <div class="availability {% if not tier.available %}sold{% endif %}">
+              {% if tier.available %}{{ tier.available_seats }} seats available{% else %}Sold out{% endif %}
+            </div>
+          </div>
+          <div class="stepper">
+            <button class="step minus" type="button" aria-label="Remove {{ tier.name }}" {% if not tier.available %}disabled{% endif %}>−</button>
+            <span class="qty">0</span>
+            <button class="step plus" type="button" aria-label="Add {{ tier.name }}" {% if not tier.available %}disabled{% endif %}>+</button>
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+
+      <div class="member-row">
+        <label class="check-wrap">
+          <input id="member" type="checkbox">
+          <span class="fake-check">✓</span>
+          <span><strong>Membership discount</strong><small>10% off, capped at ₹100</small></span>
+        </label>
+        <span class="member-tag">MEMBER</span>
+      </div>
+
+      <div class="booking-actions">
+        <button id="clear" class="secondary" type="button">Clear selection</button>
+        <span id="message" class="helper">Select tickets to calculate the bill.</span>
+      </div>
+    </section>
+
+    <section class="card receipt-card">
+      <div class="receipt-top">
+        <div>
+          <span class="eyebrow">ORDER SUMMARY</span>
+          <h2>Bill preview</h2>
+        </div>
+        <div class="receipt-id">BILL <b id="billNo"></b></div>
+      </div>
+
+      <div id="empty" class="receipt-empty">
+        <div class="receipt-icon">₹</div>
+        <strong>No tickets selected</strong>
+        <span>Your final amount will appear here.</span>
+      </div>
+
+      <div id="receipt" class="hidden">
+        <div class="receipt-items" id="items"></div>
+
+        <div class="totals">
+          <div><span>Ticket subtotal</span><b id="subtotal">₹0.00</b></div>
+          <div class="discount"><span>Festival discount</span><b id="festival">− ₹0.00</b></div>
+          <div class="discount"><span>Member discount</span><b id="memberDiscount">− ₹0.00</b></div>
+          <div><span>Convenience fee</span><b id="fee">₹0.00</b></div>
+          <div><span>GST</span><b id="gst">₹0.00</b></div>
+        </div>
+
+        <div class="total-row">
+          <div><span>Amount payable</span><small>Inclusive of GST</small></div>
+          <strong id="total">₹0.00</strong>
+        </div>
+
+        <div class="calculation-note">
+          <span>✓</span>
+          <div><strong>Pricing verified</strong><small>Discounts → fee → GST → final total</small></div>
+        </div>
+
+        <button id="print" class="primary" type="button">Print receipt</button>
+      </div>
+      <div id="error" class="error hidden"></div>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <span>{{ cinema.name }} · {{ cinema.screen }}</span>
+    <span>All prices shown in INR</span>
+  </footer>
+</main>
+
+<script>
+const MAX = {{ config.max_tickets_per_booking }};
+const selections = {};
+
+const money = value => `₹${Number(value).toFixed(2)}`;
+const quantity = () => Object.values(selections).reduce((sum, n) => sum + n, 0);
+
+function makeBillNumber() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}-${String(now.getSeconds()).padStart(2,'0')}`;
+}
+document.getElementById("billNo").textContent = makeBillNumber();
+
+function updateCount() {
+  document.getElementById("count").textContent = quantity();
+  document.getElementById("message").textContent =
+    quantity() ? `${quantity()} ticket${quantity() > 1 ? "s" : ""} selected.` : "Select tickets to calculate the bill.";
+}
+
+function showError(message) {
+  const el = document.getElementById("error");
+  el.textContent = message;
+  el.classList.remove("hidden");
+}
+function hideError() {
+  document.getElementById("error").classList.add("hidden");
+}
+
+async function calculate() {
+  hideError();
+  if (!quantity()) {
+    document.getElementById("empty").classList.remove("hidden");
+    document.getElementById("receipt").classList.add("hidden");
+    return;
+  }
+  try {
+    const response = await fetch("/api/price", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({selections, member: document.getElementById("member").checked})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to calculate price");
+
+    document.getElementById("empty").classList.add("hidden");
+    document.getElementById("receipt").classList.remove("hidden");
+
+    document.getElementById("items").innerHTML = data.items.map(item => `
+      <div class="item-line">
+        <div><strong>${item.quantity} × ${item.tier}</strong><small>${money(item.unit_price)} each</small></div>
+        <b>${money(item.amount)}</b>
+      </div>`).join("");
+
+    document.getElementById("subtotal").textContent = money(data.ticket_subtotal);
+    document.getElementById("festival").textContent = `− ${money(data.festival_discount)}`;
+    document.getElementById("memberDiscount").textContent = `− ${money(data.member_discount)}`;
+    document.getElementById("fee").textContent = money(data.convenience_fee);
+    document.getElementById("gst").textContent = money(data.gst);
+    document.getElementById("total").textContent = money(data.total);
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+document.querySelectorAll(".tier-row").forEach(row => {
+  const name = row.dataset.tier;
+  const inventory = Number(row.dataset.available);
+  const qtyEl = row.querySelector(".qty");
+
+  row.querySelector(".plus").addEventListener("click", () => {
+    if (quantity() >= MAX) {
+      showError(`A booking can contain a maximum of ${MAX} tickets.`);
+      return;
+    }
+    selections[name] = Math.min((selections[name] || 0) + 1, inventory);
+    qtyEl.textContent = selections[name];
+    row.classList.toggle("selected", selections[name] > 0);
+    updateCount();
+    calculate();
+  });
+
+  row.querySelector(".minus").addEventListener("click", () => {
+    selections[name] = Math.max((selections[name] || 0) - 1, 0);
+    if (!selections[name]) delete selections[name];
+    qtyEl.textContent = selections[name] || 0;
+    row.classList.toggle("selected", !!selections[name]);
+    updateCount();
+    calculate();
+  });
+});
+
+document.getElementById("member").addEventListener("change", calculate);
+
+document.getElementById("clear").addEventListener("click", () => {
+  Object.keys(selections).forEach(k => delete selections[k]);
+  document.querySelectorAll(".qty").forEach(el => el.textContent = "0");
+  document.querySelectorAll(".tier-row").forEach(el => el.classList.remove("selected"));
+  document.getElementById("member").checked = false;
+  updateCount();
+  calculate();
+});
+
+document.getElementById("print").addEventListener("click", () => window.print());
+</script>
+</body>
+</html>
