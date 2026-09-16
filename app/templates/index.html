@@ -259,7 +259,6 @@ document.getElementById("importPrices").addEventListener("click", async () => {
     report.innerHTML = `<div class="report-counts"><b>${data.imported.length} imported</b><b>${data.deduplicated.length} de-duplicated</b><b>${data.rejected.length} rejected</b></div>` +
       `<div class="report-list">${data.imported.map(x=>`<span>✓ ${x.name} · ₹${x.price}</span>`).join("")}${data.deduplicated.map(x=>`<span>↺ line ${x.line} · ${x.name}</span>`).join("")}${data.rejected.map(x=>`<span>× line ${x.line} · ${x.reason}</span>`).join("")}</div>`;
     report.classList.remove("hidden");
-    location.reload();
   } catch (e) { showError(e.message); }
 });
 </script>
